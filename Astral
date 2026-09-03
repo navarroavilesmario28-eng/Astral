@@ -1,0 +1,2049 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local old = PlayerGui:FindFirstChild("ASTRAL_V3")
+if old then
+	old:Destroy()
+end
+
+local C = {
+	Black = Color3.fromRGB(5,5,5),
+	Panel = Color3.fromRGB(11,11,11),
+	Panel2 = Color3.fromRGB(16,16,16),
+	Panel3 = Color3.fromRGB(24,24,24),
+	Border = Color3.fromRGB(42,42,42),
+	Border2 = Color3.fromRGB(70,70,70),
+	White = Color3.fromRGB(248,248,248),
+	Light = Color3.fromRGB(205,205,205),
+	Gray = Color3.fromRGB(135,135,135),
+	Dark = Color3.fromRGB(75,75,75)
+}
+
+local State = {
+	ActiveMode = nil,
+	Token = 0,
+	Open = true,
+
+	Normal = {
+		Distance = 10,
+		Vertical = 0,
+		X = 0,
+		Y = 0,
+		Z = 0,
+		Delay = 0.5,
+		Direction = "Forward"
+	},
+
+	Random = {
+		MinDistance = 5,
+		MaxDistance = 20,
+		Vertical = 5,
+		X = 0,
+		Y = 0,
+		Z = 0,
+		Delay = 0.5
+	},
+
+	Unpredictable = {
+		JumpCount = 10,
+		MinDistance = 5,
+		MaxDistance = 25,
+		Vertical = 10,
+		X = 0,
+		Y = 0,
+		Z = 0,
+		JumpDelay = 0.25
+	},
+
+	Custom = {
+		X = 0,
+		Y = 0,
+		Z = 0,
+		Delay = 0.5
+	},
+
+	VoidHide = {
+		X = 0,
+		Y = -100,
+		Z = 0,
+		Hold = 3,
+		ReturnPosition = true
+	},
+
+	Orbit = {
+		Radius = 15,
+		Height = 0,
+		Delay = 0.05,
+		Direction = 1
+	},
+
+	FakePosition = {
+		X = 0,
+		Y = 0,
+		Z = 0
+	}
+}
+
+local Character
+local Root
+local Humanoid
+
+local function refreshCharacter()
+	Character = Player.Character
+
+	if Character then
+		Root = Character:FindFirstChild("HumanoidRootPart")
+		Humanoid = Character:FindFirstChildOfClass("Humanoid")
+	end
+end
+
+refreshCharacter()
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "ASTRAL_V3"
+Gui.IgnoreGuiInset = true
+Gui.ResetOnSpawn = false
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Gui.DisplayOrder = 999
+Gui.Parent = PlayerGui
+
+local MainScale = Instance.new("UIScale")
+MainScale.Parent = Gui
+
+local function updateScale()
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+
+	local size = camera.ViewportSize
+	local scale = math.min(size.X / 1000, size.Y / 650)
+
+	if size.X < 500 then
+		scale = math.min(scale, 0.72)
+	end
+
+	MainScale.Scale = math.clamp(scale, 0.52, 1)
+end
+
+updateScale()
+
+if workspace.CurrentCamera then
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+end
+
+local function corner(parent, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 8)
+	c.Parent = parent
+	return c
+end
+
+local function stroke(parent, color, thickness, transparency)
+	local s = Instance.new("UIStroke")
+	s.Color = color or C.Border
+	s.Thickness = thickness or 1
+	s.Transparency = transparency or 0
+	s.Parent = parent
+	return s
+end
+
+local function makeText(parent, text, size, bold, color)
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextColor3 = color or C.White
+	label.TextSize = size or 14
+	label.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.Parent = parent
+	return label
+end
+
+local function makeButton(parent, text, height)
+	local b = Instance.new("TextButton")
+	b.AutoButtonColor = false
+	b.BackgroundColor3 = C.Panel2
+	b.BorderSizePixel = 0
+	b.Size = UDim2.new(1, 0, 0, height or 42)
+	b.Text = text
+	b.TextColor3 = C.Light
+	b.TextSize = 14
+	b.Font = Enum.Font.GothamMedium
+	b.Parent = parent
+
+	corner(b, 7)
+	stroke(b, C.Border, 1, 0)
+
+	b.MouseEnter:Connect(function()
+		TweenService:Create(
+			b,
+			TweenInfo.new(0.12),
+			{
+				BackgroundColor3 = C.Panel3,
+				TextColor3 = C.White
+			}
+		):Play()
+	end)
+
+	b.MouseLeave:Connect(function()
+		TweenService:Create(
+			b,
+			TweenInfo.new(0.12),
+			{
+				BackgroundColor3 = C.Panel2,
+				TextColor3 = C.Light
+			}
+		):Play()
+	end)
+
+	return b
+end
+
+local function makeNumber(parent, title, value, minValue, maxValue, callback)
+	local holder = Instance.new("Frame")
+	holder.BackgroundColor3 = C.Panel2
+	holder.BorderSizePixel = 0
+	holder.Size = UDim2.new(1, 0, 0, 62)
+	holder.Parent = parent
+
+	corner(holder, 7)
+	stroke(holder, C.Border, 1, 0)
+
+	local label = makeText(holder, title, 14, true, C.Light)
+	label.Position = UDim2.new(0, 14, 0, 4)
+	label.Size = UDim2.new(1, -125, 0, 26)
+
+	local box = Instance.new("TextBox")
+	box.BackgroundColor3 = C.Black
+	box.BorderSizePixel = 0
+	box.ClearTextOnFocus = false
+	box.Text = tostring(value)
+	box.TextColor3 = C.White
+	box.TextSize = 14
+	box.Font = Enum.Font.GothamMedium
+	box.TextXAlignment = Enum.TextXAlignment.Center
+	box.Size = UDim2.new(0, 92, 0, 38)
+	box.Position = UDim2.new(1, -106, 0, 12)
+	box.Parent = holder
+
+	corner(box, 6)
+	stroke(box, C.Border2, 1, 0)
+
+	box.FocusLost:Connect(function()
+		local n = tonumber(box.Text)
+
+		if not n then
+			box.Text = tostring(value)
+			return
+		end
+
+		n = math.clamp(n, minValue, maxValue)
+		value = n
+		box.Text = tostring(n)
+
+		if callback then
+			callback(n)
+		end
+	end)
+
+	return holder, box
+end
+
+local function makeToggle(parent, title, initial, callback)
+	local holder = Instance.new("Frame")
+	holder.BackgroundColor3 = C.Panel2
+	holder.BorderSizePixel = 0
+	holder.Size = UDim2.new(1, 0, 0, 56)
+	holder.Parent = parent
+
+	corner(holder, 7)
+	stroke(holder, C.Border, 1, 0)
+
+	local label = makeText(holder, title, 14, true, C.Light)
+	label.Position = UDim2.new(0, 14, 0, 0)
+	label.Size = UDim2.new(1, -115, 1, 0)
+
+	local button = Instance.new("TextButton")
+	button.AutoButtonColor = false
+	button.BackgroundColor3 = C.Black
+	button.BorderSizePixel = 0
+	button.Size = UDim2.new(0, 76, 0, 34)
+	button.Position = UDim2.new(1, -90, 0, 11)
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 12
+	button.Parent = holder
+
+	corner(button, 6)
+	stroke(button, C.Border2, 1, 0)
+
+	local enabled = initial == true
+
+	local function set(v)
+		enabled = v
+		button.Text = v and "ON" or "OFF"
+		button.TextColor3 = v and C.Black or C.Gray
+		button.BackgroundColor3 = v and C.White or C.Black
+	end
+
+	set(enabled)
+
+	button.MouseButton1Click:Connect(function()
+		enabled = not enabled
+		set(enabled)
+
+		if callback then
+			callback(enabled)
+		end
+	end)
+
+	return holder, {
+		Set = set,
+		Get = function()
+			return enabled
+		end
+	}
+end
+
+local function makeStartStop(parent, startCallback, stopCallback)
+	local holder = Instance.new("Frame")
+	holder.BackgroundTransparency = 1
+	holder.Size = UDim2.new(1, 0, 0, 48)
+	holder.Parent = parent
+
+	local start = Instance.new("TextButton")
+	start.AutoButtonColor = false
+	start.BackgroundColor3 = C.White
+	start.BorderSizePixel = 0
+	start.Size = UDim2.new(0.48, 0, 1, 0)
+	start.Text = "START"
+	start.TextColor3 = C.Black
+	start.Font = Enum.Font.GothamBold
+	start.TextSize = 13
+	start.Parent = holder
+	corner(start, 7)
+
+	local stop = Instance.new("TextButton")
+	stop.AutoButtonColor = false
+	stop.BackgroundColor3 = C.Panel2
+	stop.BorderSizePixel = 0
+	stop.Size = UDim2.new(0.48, 0, 1, 0)
+	stop.Position = UDim2.new(0.52, 0, 0, 0)
+	stop.Text = "STOP"
+	stop.TextColor3 = C.White
+	stop.Font = Enum.Font.GothamBold
+	stop.TextSize = 13
+	stop.Parent = holder
+
+	corner(stop, 7)
+	stroke(stop, C.Border2, 1, 0)
+
+	start.MouseButton1Click:Connect(function()
+		if startCallback then
+			startCallback()
+		end
+	end)
+
+	stop.MouseButton1Click:Connect(function()
+		if stopCallback then
+			stopCallback()
+		end
+	end)
+
+	return holder
+end
+
+local Loading = Instance.new("Frame")
+Loading.BackgroundColor3 = C.Black
+Loading.BorderSizePixel = 0
+Loading.Size = UDim2.fromScale(1, 1)
+Loading.ZIndex = 100
+Loading.Parent = Gui
+
+local SnowLayer = Instance.new("Frame")
+SnowLayer.BackgroundTransparency = 1
+SnowLayer.Size = UDim2.fromScale(1, 1)
+SnowLayer.ZIndex = 101
+SnowLayer.ClipsDescendants = true
+SnowLayer.Parent = Loading
+
+local snowflakes = {}
+
+for i = 1, 100 do
+	local flake = Instance.new("Frame")
+	local s = math.random(2, 5)
+
+	flake.BackgroundColor3 = i % 5 == 0 and C.Gray or C.White
+	flake.BackgroundTransparency = math.random(15, 65) / 100
+	flake.BorderSizePixel = 0
+	flake.Size = UDim2.fromOffset(s, s)
+	flake.Position = UDim2.new(math.random(), 0, math.random(), 0)
+	flake.ZIndex = 102
+	flake.Parent = SnowLayer
+
+	table.insert(snowflakes, {
+		Object = flake,
+		Speed = math.random(18, 45),
+		Drift = math.random(-12, 12)
+	})
+end
+
+local Star = makeText(Loading, "★", 30, true, C.White)
+Star.AnchorPoint = Vector2.new(0.5, 0.5)
+Star.Position = UDim2.new(0.5, 0, 0.5, -70)
+Star.Size = UDim2.fromOffset(55, 45)
+Star.TextXAlignment = Enum.TextXAlignment.Center
+Star.ZIndex = 104
+
+local LoadTitle = makeText(Loading, "ASTRAL", 40, true, C.White)
+LoadTitle.AnchorPoint = Vector2.new(0.5, 0.5)
+LoadTitle.Position = UDim2.new(0.5, 0, 0.5, -18)
+LoadTitle.Size = UDim2.fromOffset(400, 55)
+LoadTitle.TextXAlignment = Enum.TextXAlignment.Center
+LoadTitle.ZIndex = 104
+
+local LoadSubtitle = makeText(Loading, "MOVEMENT TEST SUITE", 14, false, C.Gray)
+LoadSubtitle.AnchorPoint = Vector2.new(0.5, 0.5)
+LoadSubtitle.Position = UDim2.new(0.5, 0, 0.5, 30)
+LoadSubtitle.Size = UDim2.fromOffset(400, 28)
+LoadSubtitle.TextXAlignment = Enum.TextXAlignment.Center
+LoadSubtitle.ZIndex = 104
+
+local LoadStatus = makeText(Loading, "INITIALIZING", 13, true, C.Light)
+LoadStatus.AnchorPoint = Vector2.new(0.5, 0.5)
+LoadStatus.Position = UDim2.new(0.5, 0, 0.5, 72)
+LoadStatus.Size = UDim2.fromOffset(400, 28)
+LoadStatus.TextXAlignment = Enum.TextXAlignment.Center
+LoadStatus.ZIndex = 104
+
+local LoadBarBack = Instance.new("Frame")
+LoadBarBack.BackgroundColor3 = C.Panel2
+LoadBarBack.BorderSizePixel = 0
+LoadBarBack.AnchorPoint = Vector2.new(0.5, 0.5)
+LoadBarBack.Position = UDim2.new(0.5, 0, 0.5, 112)
+LoadBarBack.Size = UDim2.fromOffset(320, 4)
+LoadBarBack.ZIndex = 104
+LoadBarBack.Parent = Loading
+
+local LoadBar = Instance.new("Frame")
+LoadBar.BackgroundColor3 = C.White
+LoadBar.BorderSizePixel = 0
+LoadBar.Size = UDim2.new(0, 0, 1, 0)
+LoadBar.ZIndex = 105
+LoadBar.Parent = LoadBarBack
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.BackgroundColor3 = C.Black
+Main.BorderSizePixel = 0
+Main.AnchorPoint = Vector2.new(0.5, 0.5)
+Main.Position = UDim2.fromScale(0.5, 0.5)
+Main.Size = UDim2.fromOffset(1000, 650)
+Main.Visible = true
+Main.Parent = Gui
+
+corner(Main, 10)
+stroke(Main, C.Border2, 1, 0)
+
+local Header = Instance.new("Frame")
+Header.BackgroundColor3 = C.Panel
+Header.BorderSizePixel = 0
+Header.Size = UDim2.new(1, 0, 0, 78)
+Header.Parent = Main
+
+local HeaderTitle = makeText(Header, "★ ASTRAL", 27, true, C.White)
+HeaderTitle.Position = UDim2.new(0, 25, 0, 8)
+HeaderTitle.Size = UDim2.new(0, 350, 0, 36)
+
+local HeaderSub = makeText(Header, "MOVEMENT TEST SUITE", 12, false, C.Gray)
+HeaderSub.Position = UDim2.new(0, 26, 0, 44)
+HeaderSub.Size = UDim2.new(0, 350, 0, 22)
+
+local HeaderStatus = makeText(Header, "● READY", 13, true, C.Light)
+HeaderStatus.AnchorPoint = Vector2.new(1, 0.5)
+HeaderStatus.Position = UDim2.new(1, -24, 0.5, 0)
+HeaderStatus.Size = UDim2.fromOffset(130, 28)
+HeaderStatus.TextXAlignment = Enum.TextXAlignment.Right
+
+local Nav = Instance.new("Frame")
+Nav.BackgroundColor3 = C.Panel
+Nav.BorderSizePixel = 0
+Nav.Position = UDim2.new(0, 0, 0, 78)
+Nav.Size = UDim2.new(0, 235, 1, -78)
+Nav.Parent = Main
+
+local NavPadding = Instance.new("UIPadding")
+NavPadding.PaddingTop = UDim.new(0, 17)
+NavPadding.PaddingLeft = UDim.new(0, 14)
+NavPadding.PaddingRight = UDim.new(0, 14)
+NavPadding.PaddingBottom = UDim.new(0, 14)
+NavPadding.Parent = Nav
+
+local NavList = Instance.new("UIListLayout")
+NavList.Padding = UDim.new(0, 7)
+NavList.SortOrder = Enum.SortOrder.LayoutOrder
+NavList.Parent = Nav
+
+local Workspace = Instance.new("Frame")
+Workspace.BackgroundColor3 = C.Black
+Workspace.BorderSizePixel = 0
+Workspace.Position = UDim2.new(0, 235, 0, 78)
+Workspace.Size = UDim2.new(1, -235, 1, -78)
+Workspace.Parent = Main
+
+local PageTitle = makeText(Workspace, "NORMAL", 28, true, C.White)
+PageTitle.Position = UDim2.new(0, 27, 0, 19)
+PageTitle.Size = UDim2.new(1, -54, 0, 38)
+
+local PageDescription = makeText(Workspace, "Fixed directional movement testing.", 14, false, C.Gray)
+PageDescription.Position = UDim2.new(0, 28, 0, 53)
+PageDescription.Size = UDim2.new(1, -56, 0, 27)
+
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.BackgroundTransparency = 1
+Scroll.BorderSizePixel = 0
+Scroll.Position = UDim2.new(0, 25, 0, 91)
+Scroll.Size = UDim2.new(1, -50, 1, -108)
+Scroll.ScrollBarThickness = 4
+Scroll.ScrollBarImageColor3 = C.Border2
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Scroll.Parent = Workspace
+
+local ContentPadding = Instance.new("UIPadding")
+ContentPadding.PaddingBottom = UDim.new(0, 25)
+ContentPadding.Parent = Scroll
+
+local ContentList = Instance.new("UIListLayout")
+ContentList.Padding = UDim.new(0, 9)
+ContentList.SortOrder = Enum.SortOrder.LayoutOrder
+ContentList.Parent = Scroll
+
+local Pages = {}
+local NavButtons = {}
+local Controls = {}
+
+local function clearPage()
+	for _, child in ipairs(Scroll:GetChildren()) do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+end
+
+local function section(title, description)
+	local card = Instance.new("Frame")
+	card.BackgroundColor3 = C.Panel
+	card.BorderSizePixel = 0
+	card.Size = UDim2.new(1, 0, 0, 65)
+	card.Parent = Scroll
+
+	corner(card, 8)
+	stroke(card, C.Border, 1, 0)
+
+	local t = makeText(card, title, 14, true, C.White)
+	t.Position = UDim2.new(0, 15, 0, 7)
+	t.Size = UDim2.new(1, -30, 0, 24)
+
+	local d = makeText(card, description, 11, false, C.Gray)
+	d.Position = UDim2.new(0, 15, 0, 32)
+	d.Size = UDim2.new(1, -30, 0, 23)
+
+	return card
+end
+
+local function directionButtons(parent, current, callback)
+	local card = Instance.new("Frame")
+	card.BackgroundColor3 = C.Panel
+	card.BorderSizePixel = 0
+	card.Size = UDim2.new(1, 0, 0, 112)
+	card.Parent = parent
+
+	corner(card, 8)
+	stroke(card, C.Border, 1, 0)
+
+	local title = makeText(card, "DIRECTION", 13, true, C.Light)
+	title.Position = UDim2.new(0, 13, 0, 7)
+	title.Size = UDim2.new(1, -26, 0, 22)
+
+	local holder = Instance.new("Frame")
+	holder.BackgroundTransparency = 1
+	holder.Position = UDim2.new(0, 13, 0, 35)
+	holder.Size = UDim2.new(1, -26, 0, 64)
+	holder.Parent = card
+
+	local grid = Instance.new("UIGridLayout")
+	grid.CellPadding = UDim2.fromOffset(6, 6)
+	grid.CellSize = UDim2.new(0.24, 0, 0, 28)
+	grid.Parent = holder
+
+	local names = {
+		"Forward",
+		"Backward",
+		"Left",
+		"Right",
+		"Up",
+		"Down"
+	}
+
+	for _, name in ipairs(names) do
+		local b = makeButton(holder, name, 28)
+		b.TextSize = 11
+
+		local function update()
+			if current == name then
+				b.BackgroundColor3 = C.White
+				b.TextColor3 = C.Black
+			else
+				b.BackgroundColor3 = C.Panel2
+				b.TextColor3 = C.Light
+			end
+		end
+
+		update()
+
+		b.MouseButton1Click:Connect(function()
+			current = name
+
+			for _, other in ipairs(holder:GetChildren()) do
+				if other:IsA("TextButton") then
+					other.BackgroundColor3 = C.Panel2
+					other.TextColor3 = C.Light
+				end
+			end
+
+			b.BackgroundColor3 = C.White
+			b.TextColor3 = C.Black
+
+			callback(name)
+		end)
+	end
+
+	return card
+end
+
+local function getRoot()
+	if not Character or not Character.Parent then
+		refreshCharacter()
+	end
+
+	if not Root or not Root.Parent then
+		refreshCharacter()
+	end
+
+	return Root
+end
+
+local function stopMovement()
+	State.Token += 1
+	State.ActiveMode = nil
+	HeaderStatus.Text = "● READY"
+end
+
+local function valid(mode, token)
+	return State.ActiveMode == mode
+		and State.Token == token
+		and getRoot() ~= nil
+end
+
+local function moveCharacter(position, lookAt)
+	local root = getRoot()
+
+	if not root or not Character or not Character.Parent then
+		return false
+	end
+
+	local cf
+
+	if lookAt then
+		local direction = lookAt - position
+
+		if direction.Magnitude > 0.001 then
+			cf = CFrame.lookAt(position, lookAt)
+		else
+			cf = root.CFrame.Rotation + position
+		end
+	else
+		cf = root.CFrame - root.Position + position
+	end
+
+	Character:PivotTo(cf)
+	return true
+end
+
+local function beginMode(mode, runner)
+	stopMovement()
+
+	State.Token += 1
+
+	local token = State.Token
+	State.ActiveMode = mode
+
+	HeaderStatus.Text = "● " .. string.upper(mode)
+
+	task.spawn(function()
+		local ok, err = pcall(function()
+			runner(token)
+		end)
+
+		if not ok then
+			warn("[ASTRAL] " .. tostring(err))
+		end
+
+		if State.ActiveMode == mode and State.Token == token then
+			stopMovement()
+		end
+	end)
+end
+
+local function directionVector(root, direction)
+	if direction == "Forward" then
+		return root.CFrame.LookVector
+	elseif direction == "Backward" then
+		return -root.CFrame.LookVector
+	elseif direction == "Left" then
+		return -root.CFrame.RightVector
+	elseif direction == "Right" then
+		return root.CFrame.RightVector
+	elseif direction == "Up" then
+		return Vector3.new(0, 1, 0)
+	elseif direction == "Down" then
+		return Vector3.new(0, -1, 0)
+	end
+
+	return root.CFrame.LookVector
+end
+
+local function buildNormal()
+	clearPage()
+
+	PageTitle.Text = "NORMAL"
+	PageDescription.Text = "Fixed directional movement testing."
+
+	section(
+		"NORMAL MOVEMENT",
+		"Move using one consistent direction with a configurable offset."
+	)
+
+	makeNumber(Scroll, "DISTANCE", State.Normal.Distance, 0, 10000, function(v)
+		State.Normal.Distance = v
+	end)
+
+	makeNumber(Scroll, "VERTICAL", State.Normal.Vertical, -10000, 10000, function(v)
+		State.Normal.Vertical = v
+	end)
+
+	makeNumber(Scroll, "X OFFSET", State.Normal.X, -10000, 10000, function(v)
+		State.Normal.X = v
+	end)
+
+	makeNumber(Scroll, "Y OFFSET", State.Normal.Y, -10000, 10000, function(v)
+		State.Normal.Y = v
+	end)
+
+	makeNumber(Scroll, "Z OFFSET", State.Normal.Z, -10000, 10000, function(v)
+		State.Normal.Z = v
+	end)
+
+	makeNumber(Scroll, "DELAY", State.Normal.Delay, 0.01, 60, function(v)
+		State.Normal.Delay = v
+	end)
+
+	directionButtons(
+		Scroll,
+		State.Normal.Direction,
+		function(v)
+			State.Normal.Direction = v
+		end
+	)
+
+	local _, toggle = makeToggle(
+		Scroll,
+		"NORMAL",
+		State.ActiveMode == "NORMAL",
+		function(on)
+			if on then
+				beginMode("NORMAL", function(token)
+					while valid("NORMAL", token) do
+						local root = getRoot()
+						if not root then
+							break
+						end
+
+						local dir = directionVector(
+							root,
+							State.Normal.Direction
+						)
+
+						local destination =
+							root.Position
+							+ dir * State.Normal.Distance
+							+ Vector3.new(
+								State.Normal.X,
+								State.Normal.Vertical + State.Normal.Y,
+								State.Normal.Z
+							)
+
+						moveCharacter(destination)
+						task.wait(State.Normal.Delay)
+					end
+				end)
+			else
+				stopMovement()
+			end
+		end
+	)
+
+	Controls.NORMAL = toggle
+end
+
+local function buildRandom()
+	clearPage()
+
+	PageTitle.Text = "RANDOM"
+	PageDescription.Text = "Randomized directional destinations."
+
+	section(
+		"RANDOM MOVEMENT",
+		"Generate a new destination each cycle."
+	)
+
+	makeNumber(
+		Scroll,
+		"MIN DISTANCE",
+		State.Random.MinDistance,
+		0,
+		10000,
+		function(v)
+			State.Random.MinDistance = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"MAX DISTANCE",
+		State.Random.MaxDistance,
+		0,
+		10000,
+		function(v)
+			State.Random.MaxDistance = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"VERTICAL RANGE",
+		State.Random.Vertical,
+		0,
+		10000,
+		function(v)
+			State.Random.Vertical = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"X OFFSET",
+		State.Random.X,
+		-10000,
+		10000,
+		function(v)
+			State.Random.X = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"Y OFFSET",
+		State.Random.Y,
+		-10000,
+		10000,
+		function(v)
+			State.Random.Y = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"Z OFFSET",
+		State.Random.Z,
+		-10000,
+		10000,
+		function(v)
+			State.Random.Z = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"DELAY",
+		State.Random.Delay,
+		0.01,
+		60,
+		function(v)
+			State.Random.Delay = v
+		end
+	)
+
+	local _, toggle = makeToggle(
+		Scroll,
+		"RANDOM",
+		State.ActiveMode == "RANDOM",
+		function(on)
+			if on then
+				beginMode("RANDOM", function(token)
+					while valid("RANDOM", token) do
+						local root = getRoot()
+
+						if not root then
+							break
+						end
+
+						local minD = math.min(
+							State.Random.MinDistance,
+							State.Random.MaxDistance
+						)
+
+						local maxD = math.max(
+							State.Random.MinDistance,
+							State.Random.MaxDistance
+						)
+
+						local distance =
+							math.random() * (maxD - minD) + minD
+
+						local angle =
+							math.random() * math.pi * 2
+
+						local horizontal = Vector3.new(
+							math.cos(angle),
+							0,
+							math.sin(angle)
+						)
+
+						local vertical =
+							(math.random() * 2 - 1)
+							* State.Random.Vertical
+
+						local destination =
+							root.Position
+							+ horizontal * distance
+							+ Vector3.new(
+								State.Random.X,
+								State.Random.Y + vertical,
+								State.Random.Z
+							)
+
+						moveCharacter(destination)
+
+						task.wait(State.Random.Delay)
+					end
+				end)
+			else
+				stopMovement()
+			end
+		end
+	)
+
+	Controls.RANDOM = toggle
+end
+
+local function buildUnpredictable()
+	clearPage()
+
+	PageTitle.Text = "UNPREDICTABLE"
+	PageDescription.Text = "Finite randomized movement sequence."
+
+	section(
+		"UNPREDICTABLE SEQUENCE",
+		"START runs the configured number of jumps, then stops."
+	)
+
+	makeNumber(
+		Scroll,
+		"JUMP COUNT",
+		State.Unpredictable.JumpCount,
+		1,
+		500,
+		function(v)
+			State.Unpredictable.JumpCount = math.floor(v)
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"MIN DISTANCE",
+		State.Unpredictable.MinDistance,
+		0,
+		10000,
+		function(v)
+			State.Unpredictable.MinDistance = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"MAX DISTANCE",
+		State.Unpredictable.MaxDistance,
+		0,
+		10000,
+		function(v)
+			State.Unpredictable.MaxDistance = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"VERTICAL RANGE",
+		State.Unpredictable.Vertical,
+		0,
+		10000,
+		function(v)
+			State.Unpredictable.Vertical = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"X OFFSET",
+		State.Unpredictable.X,
+		-10000,
+		10000,
+		function(v)
+			State.Unpredictable.X = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"Y OFFSET",
+		State.Unpredictable.Y,
+		-10000,
+		10000,
+		function(v)
+			State.Unpredictable.Y = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"Z OFFSET",
+		State.Unpredictable.Z,
+		-10000,
+		10000,
+		function(v)
+			State.Unpredictable.Z = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"JUMP DELAY",
+		State.Unpredictable.JumpDelay,
+		0.01,
+		60,
+		function(v)
+			State.Unpredictable.JumpDelay = v
+		end
+	)
+
+	makeStartStop(
+		Scroll,
+		function()
+			beginMode("UNPREDICTABLE", function(token)
+				for i = 1, State.Unpredictable.JumpCount do
+					if not valid("UNPREDICTABLE", token) then
+						break
+					end
+
+					local root = getRoot()
+
+					if not root then
+						break
+					end
+
+					local minD = math.min(
+						State.Unpredictable.MinDistance,
+						State.Unpredictable.MaxDistance
+					)
+
+					local maxD = math.max(
+						State.Unpredictable.MinDistance,
+						State.Unpredictable.MaxDistance
+					)
+
+					local distance =
+						math.random() * (maxD - minD) + minD
+
+					local angle =
+						math.random() * math.pi * 2
+
+					local destination =
+						root.Position
+						+ Vector3.new(
+							math.cos(angle) * distance,
+							(math.random() * 2 - 1)
+								* State.Unpredictable.Vertical,
+							math.sin(angle) * distance
+						)
+						+ Vector3.new(
+							State.Unpredictable.X,
+							State.Unpredictable.Y,
+							State.Unpredictable.Z
+						)
+
+					moveCharacter(destination)
+
+					task.wait(State.Unpredictable.JumpDelay)
+				end
+			end)
+		end,
+		function()
+			stopMovement()
+		end
+	)
+end
+
+local function buildCustom()
+	clearPage()
+
+	PageTitle.Text = "CUSTOM"
+	PageDescription.Text = "Exact XYZ destination offset."
+
+	section(
+		"CUSTOM MOVEMENT",
+		"Apply the exact XYZ offset repeatedly."
+	)
+
+	makeNumber(Scroll, "X", State.Custom.X, -10000, 10000, function(v)
+		State.Custom.X = v
+	end)
+
+	makeNumber(Scroll, "Y", State.Custom.Y, -10000, 10000, function(v)
+		State.Custom.Y = v
+	end)
+
+	makeNumber(Scroll, "Z", State.Custom.Z, -10000, 10000, function(v)
+		State.Custom.Z = v
+	end)
+
+	makeNumber(Scroll, "DELAY", State.Custom.Delay, 0.01, 60, function(v)
+		State.Custom.Delay = v
+	end)
+
+	local _, toggle = makeToggle(
+		Scroll,
+		"CUSTOM",
+		State.ActiveMode == "CUSTOM",
+		function(on)
+			if on then
+				beginMode("CUSTOM", function(token)
+					while valid("CUSTOM", token) do
+						local root = getRoot()
+
+						if not root then
+							break
+						end
+
+						local destination =
+							root.Position
+							+ Vector3.new(
+								State.Custom.X,
+								State.Custom.Y,
+								State.Custom.Z
+							)
+
+						moveCharacter(destination)
+
+						task.wait(State.Custom.Delay)
+					end
+				end)
+			else
+				stopMovement()
+			end
+		end
+	)
+
+	Controls.CUSTOM = toggle
+end
+
+local savedVoidPosition
+
+local function buildVoidHide()
+	clearPage()
+
+	PageTitle.Text = "VOID HIDE"
+	PageDescription.Text = "Move to a configurable hidden test position."
+
+	section(
+		"VOID POSITION",
+		"The position is relative to the character when activated."
+	)
+
+	makeNumber(Scroll, "X", State.VoidHide.X, -100000, 100000, function(v)
+		State.VoidHide.X = v
+	end)
+
+	makeNumber(Scroll, "Y", State.VoidHide.Y, -100000, 100000, function(v)
+		State.VoidHide.Y = v
+	end)
+
+	makeNumber(Scroll, "Z", State.VoidHide.Z, -100000, 100000, function(v)
+		State.VoidHide.Z = v
+	end)
+
+	makeNumber(Scroll, "HOLD", State.VoidHide.Hold, 0.05, 300, function(v)
+		State.VoidHide.Hold = v
+	end)
+
+	local _, returnToggle = makeToggle(
+		Scroll,
+		"RETURN POSITION",
+		State.VoidHide.ReturnPosition,
+		function(v)
+			State.VoidHide.ReturnPosition = v
+		end
+	)
+
+	local _, toggle = makeToggle(
+		Scroll,
+		"VOID HIDE",
+		State.ActiveMode == "VOID HIDE",
+		function(on)
+			if on then
+				beginMode("VOID HIDE", function(token)
+					local root = getRoot()
+
+					if not root then
+						return
+					end
+
+					savedVoidPosition = root.CFrame
+
+					local destination =
+						root.Position
+						+ Vector3.new(
+							State.VoidHide.X,
+							State.VoidHide.Y,
+							State.VoidHide.Z
+						)
+
+					moveCharacter(destination)
+
+					local elapsed = 0
+
+					while elapsed < State.VoidHide.Hold do
+						if not valid("VOID HIDE", token) then
+							return
+						end
+
+						task.wait(0.05)
+						elapsed += 0.05
+					end
+
+					if valid("VOID HIDE", token)
+						and State.VoidHide.ReturnPosition
+						and savedVoidPosition then
+
+						if Character and Character.Parent then
+							Character:PivotTo(savedVoidPosition)
+						end
+					end
+				end)
+			else
+				local shouldReturn = State.VoidHide.ReturnPosition
+
+				stopMovement()
+
+				if shouldReturn
+					and savedVoidPosition
+					and Character
+					and Character.Parent then
+
+					Character:PivotTo(savedVoidPosition)
+				end
+			end
+		end
+	)
+
+	Controls["VOID HIDE"] = toggle
+	Controls["VOID RETURN"] = returnToggle
+end
+
+local orbitCenter
+local orbitAngle = 0
+
+local function buildOrbit()
+	clearPage()
+
+	PageTitle.Text = "ORBIT"
+	PageDescription.Text = "Stable circular movement around a saved center."
+
+	section(
+		"ORBIT MOVEMENT",
+		"The center is captured when Orbit is enabled."
+	)
+
+	makeNumber(
+		Scroll,
+		"RADIUS",
+		State.Orbit.Radius,
+		0,
+		10000,
+		function(v)
+			State.Orbit.Radius = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"HEIGHT",
+		State.Orbit.Height,
+		-10000,
+		10000,
+		function(v)
+			State.Orbit.Height = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"DELAY",
+		State.Orbit.Delay,
+		0.01,
+		10,
+		function(v)
+			State.Orbit.Delay = v
+		end
+	)
+
+	local directionCard = Instance.new("Frame")
+	directionCard.BackgroundColor3 = C.Panel
+	directionCard.BorderSizePixel = 0
+	directionCard.Size = UDim2.new(1, 0, 0, 62)
+	directionCard.Parent = Scroll
+
+	corner(directionCard, 8)
+	stroke(directionCard, C.Border, 1, 0)
+
+	local directionText = makeText(
+		directionCard,
+		"DIRECTION",
+		14,
+		true,
+		C.Light
+	)
+
+	directionText.Position = UDim2.new(0, 13, 0, 0)
+	directionText.Size = UDim2.new(1, -120, 1, 0)
+
+	local directionButton = Instance.new("TextButton")
+	directionButton.AutoButtonColor = false
+	directionButton.BackgroundColor3 = C.Panel2
+	directionButton.BorderSizePixel = 0
+	directionButton.Size = UDim2.fromOffset(94, 36)
+	directionButton.Position = UDim2.new(1, -108, 0, 13)
+	directionButton.Text = State.Orbit.Direction == 1 and "RIGHT" or "LEFT"
+	directionButton.TextColor3 = C.White
+	directionButton.TextSize = 12
+	directionButton.Font = Enum.Font.GothamBold
+	directionButton.Parent = directionCard
+
+	corner(directionButton, 6)
+	stroke(directionButton, C.Border2, 1, 0)
+
+	directionButton.MouseButton1Click:Connect(function()
+		State.Orbit.Direction *= -1
+		directionButton.Text =
+			State.Orbit.Direction == 1
+			and "RIGHT"
+			or "LEFT"
+	end)
+
+	local _, toggle = makeToggle(
+		Scroll,
+		"ORBIT",
+		State.ActiveMode == "ORBIT",
+		function(on)
+			if on then
+				local root = getRoot()
+
+				if not root then
+					return
+				end
+
+				orbitCenter = root.Position
+				orbitAngle = 0
+
+				beginMode("ORBIT", function(token)
+					while valid("ORBIT", token) do
+						local currentRoot = getRoot()
+
+						if not currentRoot then
+							break
+						end
+
+						orbitAngle += State.Orbit.Direction * 0.12
+
+						local destination =
+							orbitCenter
+							+ Vector3.new(
+								math.cos(orbitAngle)
+									* State.Orbit.Radius,
+								State.Orbit.Height,
+								math.sin(orbitAngle)
+									* State.Orbit.Radius
+							)
+
+						moveCharacter(destination, orbitCenter)
+
+						task.wait(State.Orbit.Delay)
+					end
+				end)
+			else
+				stopMovement()
+			end
+		end
+	)
+
+	Controls.ORBIT = toggle
+end
+
+local FakeMarker
+
+local function createFakeMarker()
+	if FakeMarker then
+		FakeMarker:Destroy()
+	end
+
+	FakeMarker = Instance.new("Part")
+	FakeMarker.Name = "ASTRAL_FakePosition"
+	FakeMarker.Anchored = true
+	FakeMarker.CanCollide = false
+	FakeMarker.CanQuery = false
+	FakeMarker.CanTouch = false
+	FakeMarker.Size = Vector3.new(2.5, 3.5, 2.5)
+	FakeMarker.Transparency = 0.78
+	FakeMarker.Material = Enum.Material.SmoothPlastic
+	FakeMarker.Color = C.White
+	FakeMarker.Parent = workspace
+end
+
+local function updateFakeMarker()
+	if not FakeMarker then
+		createFakeMarker()
+	end
+
+	local root = getRoot()
+
+	if not root then
+		FakeMarker.Transparency = 1
+		return
+	end
+
+	FakeMarker.Transparency = 0.78
+
+	FakeMarker.CFrame =
+		root.CFrame
+		+ Vector3.new(
+			State.FakePosition.X,
+			State.FakePosition.Y,
+			State.FakePosition.Z
+		)
+end
+
+local function buildFakePosition()
+	clearPage()
+
+	PageTitle.Text = "FAKE POSITION"
+	PageDescription.Text = "Visual-only position marker."
+
+	section(
+		"VISUAL MARKER",
+		"The marker shows the configured offset without changing the character."
+	)
+
+	makeNumber(
+		Scroll,
+		"X OFFSET",
+		State.FakePosition.X,
+		-10000,
+		10000,
+		function(v)
+			State.FakePosition.X = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"Y OFFSET",
+		State.FakePosition.Y,
+		-10000,
+		10000,
+		function(v)
+			State.FakePosition.Y = v
+		end
+	)
+
+	makeNumber(
+		Scroll,
+		"Z OFFSET",
+		State.FakePosition.Z,
+		-10000,
+		10000,
+		function(v)
+			State.FakePosition.Z = v
+		end
+	)
+
+	local _, toggle = makeToggle(
+		Scroll,
+		"FAKE POSITION",
+		FakeMarker ~= nil
+			and FakeMarker.Transparency < 1,
+		function(on)
+			if on then
+				createFakeMarker()
+				updateFakeMarker()
+			elseif FakeMarker then
+				FakeMarker.Transparency = 1
+			end
+		end
+	)
+
+	Controls["FAKE POSITION"] = toggle
+end
+
+local MonitorLabels = {}
+
+local function buildMonitor()
+	clearPage()
+
+	PageTitle.Text = "MONITOR"
+	PageDescription.Text = "Live local movement telemetry."
+
+	section(
+		"LIVE TELEMETRY",
+		"Values update while the workspace is running."
+	)
+
+	local card = Instance.new("Frame")
+	card.BackgroundColor3 = C.Panel
+	card.BorderSizePixel = 0
+	card.Size = UDim2.new(1, 0, 0, 270)
+	card.Parent = Scroll
+
+	corner(card, 8)
+	stroke(card, C.Border, 1, 0)
+
+	local list = Instance.new("UIListLayout")
+	list.Padding = UDim.new(0, 3)
+	list.Parent = card
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 12)
+	padding.PaddingLeft = UDim.new(0, 14)
+	padding.PaddingRight = UDim.new(0, 14)
+	padding.Parent = card
+
+	local names = {
+		"MODE",
+		"POSITION",
+		"VELOCITY",
+		"HEALTH",
+		"STATE",
+		"FPS"
+	}
+
+	for _, name in ipairs(names) do
+		local row = Instance.new("Frame")
+		row.BackgroundColor3 = C.Panel2
+		row.BorderSizePixel = 0
+		row.Size = UDim2.new(1, 0, 0, 38)
+		row.Parent = card
+
+		corner(row, 5)
+
+		local left = makeText(
+			row,
+			name,
+			12,
+			true,
+			C.Gray
+		)
+
+		left.Position = UDim2.new(0, 11, 0, 0)
+		left.Size = UDim2.new(0.35, 0, 1, 0)
+
+		local right = makeText(
+			row,
+			"--",
+			12,
+			false,
+			C.White
+		)
+
+		right.Position = UDim2.new(0.35, 0, 0, 0)
+		right.Size = UDim2.new(0.65, -11, 1, 0)
+		right.TextXAlignment = Enum.TextXAlignment.Right
+
+		MonitorLabels[name] = right
+	end
+end
+
+local function buildSettings()
+	clearPage()
+
+	PageTitle.Text = "SETTINGS"
+	PageDescription.Text = "ASTRAL workspace controls."
+
+	section(
+		"GENERAL",
+		"Utility controls for the test suite."
+	)
+
+	local reset = makeButton(
+		Scroll,
+		"RESET VALUES",
+		46
+	)
+
+	reset.MouseButton1Click:Connect(function()
+		State.Normal.Distance = 10
+		State.Normal.Vertical = 0
+		State.Normal.X = 0
+		State.Normal.Y = 0
+		State.Normal.Z = 0
+		State.Normal.Delay = 0.5
+		State.Normal.Direction = "Forward"
+
+		State.Random.MinDistance = 5
+		State.Random.MaxDistance = 20
+		State.Random.Vertical = 5
+		State.Random.X = 0
+		State.Random.Y = 0
+		State.Random.Z = 0
+		State.Random.Delay = 0.5
+
+		State.Unpredictable.JumpCount = 10
+		State.Unpredictable.MinDistance = 5
+		State.Unpredictable.MaxDistance = 25
+		State.Unpredictable.Vertical = 10
+		State.Unpredictable.X = 0
+		State.Unpredictable.Y = 0
+		State.Unpredictable.Z = 0
+		State.Unpredictable.JumpDelay = 0.25
+
+		State.Custom.X = 0
+		State.Custom.Y = 0
+		State.Custom.Z = 0
+		State.Custom.Delay = 0.5
+
+		State.VoidHide.X = 0
+		State.VoidHide.Y = -100
+		State.VoidHide.Z = 0
+		State.VoidHide.Hold = 3
+		State.VoidHide.ReturnPosition = true
+
+		State.Orbit.Radius = 15
+		State.Orbit.Height = 0
+		State.Orbit.Delay = 0.05
+		State.Orbit.Direction = 1
+
+		State.FakePosition.X = 0
+		State.FakePosition.Y = 0
+		State.FakePosition.Z = 0
+
+		stopMovement()
+
+		selectPage("SETTINGS")
+	end)
+
+	local stop = makeButton(
+		Scroll,
+		"STOP ALL",
+		46
+	)
+
+	stop.MouseButton1Click:Connect(function()
+		stopMovement()
+
+		for _, control in pairs(Controls) do
+			if control and control.Set then
+				control.Set(false)
+			end
+		end
+	end)
+
+	local info = Instance.new("Frame")
+	info.BackgroundColor3 = C.Panel
+	info.BorderSizePixel = 0
+	info.Size = UDim2.new(1, 0, 0, 135)
+	info.Parent = Scroll
+
+	corner(info, 8)
+	stroke(info, C.Border, 1, 0)
+
+	local title = makeText(
+		info,
+		"ASTRAL",
+		16,
+		true,
+		C.White
+	)
+
+	title.Position = UDim2.new(0, 15, 0, 10)
+	title.Size = UDim2.new(1, -30, 0, 25)
+
+	local text = makeText(
+		info,
+		"Black & white movement testing workspace.\n\nOnly one movement mode can run at a time.\nFake Position is visual-only.",
+		12,
+		false,
+		C.Gray
+	)
+
+	text.Position = UDim2.new(0, 15, 0, 40)
+	text.Size = UDim2.new(1, -30, 0, 82)
+	text.TextWrapped = true
+end
+
+Pages.NORMAL = buildNormal
+Pages.RANDOM = buildRandom
+Pages.UNPREDICTABLE = buildUnpredictable
+Pages.CUSTOM = buildCustom
+Pages["VOID HIDE"] = buildVoidHide
+Pages.ORBIT = buildOrbit
+Pages["FAKE POSITION"] = buildFakePosition
+Pages.MONITOR = buildMonitor
+Pages.SETTINGS = buildSettings
+
+local function selectPage(name)
+	if not Pages[name] then
+		return
+	end
+
+	for key, button in pairs(NavButtons) do
+		if key == name then
+			button.BackgroundColor3 = C.White
+			button.TextColor3 = C.Black
+		else
+			button.BackgroundColor3 = C.Panel2
+			button.TextColor3 = C.Light
+		end
+	end
+
+	Pages[name]()
+end
+
+local navOrder = {
+	"NORMAL",
+	"RANDOM",
+	"UNPREDICTABLE",
+	"CUSTOM",
+	"VOID HIDE",
+	"ORBIT"
+}
+
+for index, name in ipairs(navOrder) do
+	local button = makeButton(
+		Nav,
+		name,
+		42
+	)
+
+	button.LayoutOrder = index
+	NavButtons[name] = button
+
+	button.MouseButton1Click:Connect(function()
+		selectPage(name)
+	end)
+end
+
+local divider = Instance.new("Frame")
+divider.BackgroundColor3 = C.Border
+divider.BorderSizePixel = 0
+divider.Size = UDim2.new(1, 0, 0, 1)
+divider.LayoutOrder = 20
+divider.Parent = Nav
+
+local extraOrder = 21
+
+for _, name in ipairs({
+	"FAKE POSITION",
+	"MONITOR",
+	"SETTINGS"
+}) do
+	local button = makeButton(
+		Nav,
+		name,
+		42
+	)
+
+	button.LayoutOrder = extraOrder
+	extraOrder += 1
+
+	NavButtons[name] = button
+
+	button.MouseButton1Click:Connect(function()
+		selectPage(name)
+	end)
+end
+
+local Floating = Instance.new("TextButton")
+Floating.Name = "ASTRAL_TOGGLE"
+Floating.AutoButtonColor = false
+Floating.BackgroundColor3 = C.Black
+Floating.BorderSizePixel = 0
+Floating.AnchorPoint = Vector2.new(0, 0.5)
+Floating.Position = UDim2.new(0, 12, 0.5, 0)
+Floating.Size = UDim2.fromOffset(160, 52)
+Floating.Text = "★ ASTRAL"
+Floating.TextColor3 = C.White
+Floating.TextSize = 15
+Floating.Font = Enum.Font.GothamBold
+Floating.ZIndex = 500
+Floating.Visible = false
+Floating.Parent = Gui
+
+corner(Floating, 8)
+stroke(Floating, C.Border2, 1, 0)
+
+Floating.MouseEnter:Connect(function()
+	TweenService:Create(
+		Floating,
+		TweenInfo.new(0.12),
+		{
+			BackgroundColor3 = C.Panel2
+		}
+	):Play()
+end)
+
+Floating.MouseLeave:Connect(function()
+	TweenService:Create(
+		Floating,
+		TweenInfo.new(0.12),
+		{
+			BackgroundColor3 = C.Black
+		}
+	):Play()
+end)
+
+Floating.MouseButton1Click:Connect(function()
+	State.Open = not State.Open
+	Main.Visible = State.Open
+
+	Floating.Text =
+		State.Open
+		and "★ ASTRAL"
+		or "★ OPEN"
+end)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+
+	if input.KeyCode == Enum.KeyCode.RightShift then
+		State.Open = not State.Open
+		Main.Visible = State.Open
+
+		Floating.Text =
+			State.Open
+			and "★ ASTRAL"
+			or "★ OPEN"
+	end
+end)
+
+Player.CharacterAdded:Connect(function(character)
+	Character = character
+	Root = character:WaitForChild("HumanoidRootPart", 5)
+	Humanoid = character:FindFirstChildOfClass("Humanoid")
+
+	stopMovement()
+
+	if FakeMarker then
+		FakeMarker.Transparency = 1
+	end
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+	for _, flake in ipairs(snowflakes) do
+		local object = flake.Object
+
+		if object.Parent then
+			local camera = workspace.CurrentCamera
+
+			if camera then
+				local viewport = camera.ViewportSize
+
+				local pos = object.Position
+
+				local x = pos.X.Scale
+				local y =
+					pos.Y.Scale
+					+ (
+						flake.Speed
+						* dt
+						/ math.max(viewport.Y, 1)
+					)
+
+				local drift =
+					flake.Drift
+					* dt
+					/ math.max(viewport.X, 1)
+
+				x += drift
+
+				if y > 1.05 then
+					y = -0.05
+					x = math.random()
+				end
+
+				if x > 1.05 then
+					x = -0.05
+				end
+
+				if x < -0.05 then
+					x = 1.05
+				end
+
+				object.Position = UDim2.new(
+					x,
+					0,
+					y,
+					0
+				)
+			end
+		end
+	end
+
+	if FakeMarker and FakeMarker.Parent then
+		updateFakeMarker()
+	end
+
+	local root = getRoot()
+
+	if MonitorLabels.MODE then
+		MonitorLabels.MODE.Text =
+			State.ActiveMode or "IDLE"
+	end
+
+	if root then
+		local p = root.Position
+		local v = root.AssemblyLinearVelocity
+
+		if MonitorLabels.POSITION then
+			MonitorLabels.POSITION.Text = string.format(
+				"X %.1f   Y %.1f   Z %.1f",
+				p.X,
+				p.Y,
+				p.Z
+			)
+		end
+
+		if MonitorLabels.VELOCITY then
+			MonitorLabels.VELOCITY.Text = string.format(
+				"X %.1f   Y %.1f   Z %.1f",
+				v.X,
+				v.Y,
+				v.Z
+			)
+		end
+
+		if MonitorLabels.HEALTH and Humanoid then
+			MonitorLabels.HEALTH.Text = string.format(
+				"%.0f / %.0f",
+				Humanoid.Health,
+				Humanoid.MaxHealth
+			)
+		end
+
+		if MonitorLabels.STATE then
+			MonitorLabels.STATE.Text =
+				Humanoid
+				and Humanoid:GetState().Name
+				or "UNKNOWN"
+		end
+	end
+end)
+
+task.spawn(function()
+	local stages = {
+		{"INITIALIZING", 0.2},
+		{"BUILDING WORKSPACE", 0.45},
+		{"LOADING MOVEMENT MODULES", 0.7},
+		{"ASTRAL READY", 1}
+	}
+
+	for _, stage in ipairs(stages) do
+		LoadStatus.Text = stage[1]
+
+		TweenService:Create(
+			LoadBar,
+			TweenInfo.new(
+				0.45,
+				Enum.EasingStyle.Quad,
+				Enum.EasingDirection.Out
+			),
+			{
+				Size = UDim2.new(
+					stage[2],
+					0,
+					1,
+					0
+				)
+			}
+		):Play()
+
+		task.wait(0.55)
+	end
+
+	task.wait(0.35)
+
+	local fadeFrames = {
+		Loading,
+		LoadBarBack,
+		LoadBar
+	}
+
+	for _, object in ipairs(fadeFrames) do
+		TweenService:Create(
+			object,
+			TweenInfo.new(0.55),
+			{
+				BackgroundTransparency = 1
+			}
+		):Play()
+	end
+
+	local fadeText = {
+		Star,
+		LoadTitle,
+		LoadSubtitle,
+		LoadStatus
+	}
+
+	for _, object in ipairs(fadeText) do
+		TweenService:Create(
+			object,
+			TweenInfo.new(0.55),
+			{
+				TextTransparency = 1
+			}
+		):Play()
+	end
+
+	task.wait(0.7)
+
+	Loading.Visible = false
+	Floating.Visible = true
+
+	selectPage("NORMAL")
+end)
